@@ -14,11 +14,11 @@ fonctionne. Boost apporte la méthode et l'outillage.
 
 ## Fonctionnalités du MVP
 
-- 📋 Pipeline kanban : à postuler → envoyée → relancée → entretien → offre
-- ⏰ Rappels de relance automatiques par email
-- ✉️ Templates de messages avec variables pré-remplies
-- 💡 Astuces contextuelles selon l'étape de la candidature
-- 📊 Statistiques : taux de réponse, conversion par canal
+- Pipeline kanban : à postuler → envoyée → relancée → entretien → offre
+- Rappels de relance automatiques par email
+- Templates de messages avec variables pré-remplies
+- Astuces contextuelles selon l'étape de la candidature
+- Statistiques : taux de réponse, conversion par canal
 
 ## Stack technique
 
