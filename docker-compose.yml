@@ -1,0 +1,23 @@
+# Environnement de développement local.
+# D2 tranché : cron + table Reminder → pas de Redis au MVP.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: boost-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: boost
+      POSTGRES_PASSWORD: boost
+      POSTGRES_DB: boost
+    ports:
+      - '5432:5432'
+    volumes:
+      - boost-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U boost -d boost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  boost-postgres-data:

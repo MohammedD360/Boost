@@ -30,10 +30,10 @@ fonctionne. Boost apporte la méthode et l'outillage.
 
 🚧 En développement — MVP prévu pour septembre 2026
 
-| Jalon | Statut |
-|---|---|
-| Cahier des charges | ✅ |
-| Schéma de base de données | 🔜 |
-| Socle API (auth + pipeline) | ⏳ |
-| Frontend MVP | ⏳ |
-| Mise en production | ⏳ |
+| Jalon                       | Statut |
+| --------------------------- | ------ |
+| Cahier des charges          | ✅     |
+| Schéma de base de données   | 🔜     |
+| Socle API (auth + pipeline) | ⏳     |
+| Frontend MVP                | ⏳     |
+| Mise en production          | ⏳     |
