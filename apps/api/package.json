@@ -1,0 +1,13 @@
+{
+  "name": "@boost/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@boost/shared": "*"
+  }
+}
