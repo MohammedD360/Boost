@@ -2,12 +2,27 @@
 
 ### Assistant intelligent de candidature
 
-|                 |                                                                             |
-| --------------- | --------------------------------------------------------------------------- |
-| **Version**     | 1.0                                                                         |
-| **Auteur**      | [Ton nom]                                                                   |
-| **Statut**      | Validé — MVP en cours                                                       |
-| **Emplacement** | `/docs/cdc.md` dans le repo (document vivant, mis à jour à chaque décision) |
+|                 |                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| **Version**     | 1.1                                                                                        |
+| **Auteur**      | [Ton nom]                                                                                  |
+| **Statut**      | Validé — MVP en cours (décisions D1–D6 verrouillées le 2026-07-21)                         |
+| **Emplacement** | `/docs/cahier-des-charges.md` dans le repo (document vivant, mis à jour à chaque décision) |
+
+---
+
+## 0. Décisions structurantes verrouillées (D1–D6)
+
+Décisions coûteuses à défaire, prises avant d'écrire du code et **non rediscutées avant la V2**. Le détail d'exécution vit dans `docs/roadmap.md`.
+
+| #      | Décision         | Choix verrouillé                                                                                                                         |
+| ------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1** | Multi-tenant     | Tables `Establishment` et `Cohort` posées dès la 1re migration, **aucun écran école au MVP** (voir §7)                                   |
+| **D2** | Jobs / rappels   | **Cron quotidien + table `Reminder`** comme garde-fou. BullMQ/Redis écartés au MVP (voir §8)                                             |
+| **D3** | Visibilité école | L'école voit des **volumes et alertes**, jamais le contenu des messages ni le détail des refus (fonctionnalité V2)                       |
+| **D4** | RGPD suppression | Suppression de compte = **suppression effective en cascade** sur `Application`, `StatusHistory` et `Reminder` (voir §9)                  |
+| **D5** | Statistiques     | **Indicateurs d'effort** (envoyées cette semaine, relances faites, en attente de relance). Pas de taux de conversion au MVP (voir §4 F6) |
+| **D6** | Dates des jalons | Jalons datés (voir §11), ancrés sur le calendrier de `docs/roadmap.md` (S1 = semaine du 2026-07-21)                                      |
 
 ---
 
@@ -74,11 +89,12 @@ Le problème n'est pas la compétence des candidats, c'est **l'absence de métho
 - Conseils affichés selon l'état de la candidature (ex. état `Entretien` → checklist de préparation)
 - Contenu géré par l'`ADMIN` (CRUD des astuces, association à un état)
 
-### F6 — Statistiques
+### F6 — Indicateurs d'effort (D5)
 
-- Taux de réponse global et par canal (LinkedIn, site carrière, cooptation…)
-- Taux de conversion entre chaque étape du pipeline
-- Délai moyen de réponse
+- Candidatures **envoyées cette semaine**
+- **Relances faites** (rappels traités par l'utilisateur)
+- Candidatures **en attente de relance**
+- Décision : **pas de taux de conversion ni d'analyse par canal au MVP**. Mesurer l'effort motive et se calcule sans historique long ; le résultat (taux de réponse, conversion) demande des volumes qu'on n'aura pas avant plusieurs mois — reporté en V2.
 
 ## 5. Hors périmètre (décisions explicites)
 
@@ -129,7 +145,10 @@ _(Les user stories complètes sont maintenues dans le backlog GitHub Projects �
 ## 7. Modèle de données (haut niveau)
 
 ```
-User (id, email, passwordHash, role, reminderDelayDays)
+Establishment (id, name)                       — D1, aucun écran au MVP
+  └─ 1:N ─ Cohort (id, name, establishmentId)   — D1, aucun écran au MVP
+
+User (id, email, passwordHash, role, reminderDelayDays, cohortId?)
   └─ 1:N ─ Application (id, company, position, channel, offerUrl, contactName,
                         contactEmail, notes, status, createdAt)
               ├─ 1:N ─ StatusHistory (id, fromStatus, toStatus, changedAt)
@@ -141,7 +160,8 @@ Tip (id, targetStatus, title, content)    — géré par ADMIN
 
 Points de conception :
 
-- `status` : enum stricte côté BDD **et** côté TypeScript (source de vérité partagée via zod)
+- **D1 — Multi-tenant** : `Establishment` et `Cohort` sont créées dès la première migration, avec `User.cohortId` nullable. Aucun écran école n'existe au MVP ; poser les tables maintenant évite une migration douloureuse plus tard.
+- `status` : enum stricte côté BDD **et** côté TypeScript (source de vérité partagée via zod, dans `packages/shared`)
 - Les transitions d'état valides sont définies dans une machine à états côté service — pas dans le controller, pas dans le front
 - Le schéma détaillé (types, index, contraintes) vit dans `prisma/schema.prisma` ; ce diagramme donne l'intention
 
@@ -149,24 +169,24 @@ Points de conception :
 
 > Règle : chaque choix mentionne l'alternative écartée et le motif. C'est ce qui rend le document défendable en entretien.
 
-| Domaine        | Choix                                                 | Alternatives écartées | Justification                                                                                                               |
-| -------------- | ----------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Backend        | **NestJS (TypeScript)**                               | Express nu, Fastify   | Architecture en modules imposée (bonne pratique à démontrer), injection de dépendances, très demandé sur le marché français |
-| BDD            | **PostgreSQL**                                        | MongoDB               | Données fortement relationnelles (users → applications → historique), besoins d'agrégations pour les stats                  |
-| ORM            | **Prisma**                                            | TypeORM               | Types générés automatiquement, migrations simples, DX moderne                                                               |
-| Jobs & rappels | **BullMQ + Redis**                                    | node-cron simple      | Persistance des jobs (un redémarrage ne perd pas les rappels), retry natif, standard industriel                             |
-| Emails         | **Resend** (ou Brevo)                                 | SMTP maison           | Délivrabilité gérée, tier gratuit suffisant, API simple                                                                     |
-| Frontend       | **React + Vite + TypeScript**                         | Next.js               | Une SPA suffit (pas de besoin SEO) ; Next.js envisagé en V2 pour la partie publique/marketing                               |
-| Data fetching  | **TanStack Query**                                    | Redux + fetch maison  | Cache, invalidation et optimistic updates (indispensable pour le kanban fluide)                                             |
-| Formulaires    | **React Hook Form + zod**                             | Formik                | Schémas de validation **partagés** entre front et back                                                                      |
-| UI             | **Tailwind CSS + shadcn/ui**                          | MUI                   | Rapidité sans design figé, composants accessibles                                                                           |
-| Tests          | **Vitest + Supertest + Testing Library + Playwright** | Jest                  | Vitest natif Vite ; Playwright pour 2-3 parcours E2E critiques                                                              |
-| Infra          | **Docker + GitHub Actions + Railway**                 | VPS dès le départ     | Déploiement continu simple d'abord ; migration VPS/nginx prévue au mois 4 comme exercice                                    |
+| Domaine        | Choix                                                 | Alternatives écartées | Justification                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend        | **NestJS (TypeScript)**                               | Express nu, Fastify   | Architecture en modules imposée (bonne pratique à démontrer), injection de dépendances, très demandé sur le marché français                                                                         |
+| BDD            | **PostgreSQL**                                        | MongoDB               | Données fortement relationnelles (users → applications → historique), besoins d'agrégations pour les stats                                                                                          |
+| ORM            | **Prisma**                                            | TypeORM               | Types générés automatiquement, migrations simples, DX moderne                                                                                                                                       |
+| Jobs & rappels | **Cron quotidien + table `Reminder`** (D2)            | BullMQ + Redis        | Le volume (1 balayage/jour) ne justifie pas Redis + une file ; la table `Reminder` persiste l'état et garantit l'absence de double envoi. BullMQ reporté en V2 si le besoin de retry/scale apparaît |
+| Emails         | **Resend** (ou Brevo)                                 | SMTP maison           | Délivrabilité gérée, tier gratuit suffisant, API simple                                                                                                                                             |
+| Frontend       | **React + Vite + TypeScript**                         | Next.js               | Une SPA suffit (pas de besoin SEO) ; Next.js envisagé en V2 pour la partie publique/marketing                                                                                                       |
+| Data fetching  | **TanStack Query**                                    | Redux + fetch maison  | Cache, invalidation et optimistic updates (indispensable pour le kanban fluide)                                                                                                                     |
+| Formulaires    | **React Hook Form + zod**                             | Formik                | Schémas de validation **partagés** entre front et back                                                                                                                                              |
+| UI             | **Tailwind CSS + shadcn/ui**                          | MUI                   | Rapidité sans design figé, composants accessibles                                                                                                                                                   |
+| Tests          | **Vitest + Supertest + Testing Library + Playwright** | Jest                  | Vitest natif Vite ; Playwright pour 2-3 parcours E2E critiques                                                                                                                                      |
+| Infra          | **Docker + GitHub Actions + Railway**                 | VPS dès le départ     | Déploiement continu simple d'abord ; migration VPS/nginx prévue au mois 4 comme exercice                                                                                                            |
 
 ## 9. Exigences non fonctionnelles
 
 - **Sécurité** : hash argon2, rate limiting sur l'auth, validation zod de toute entrée, headers helmet, protection contre l'accès aux données d'autrui testée (US-01)
-- **RGPD** : suppression de compte = suppression effective des données ; pas de donnée sensible au-delà du nécessaire
+- **RGPD (D4)** : la suppression de compte = suppression **effective en cascade** des `Application`, `StatusHistory` et `Reminder` de l'utilisateur (pas d'anonymisation au MVP). Contrainte `onDelete: Cascade` dans le schéma Prisma et test réel de la suppression (pas seulement codée). Pas de donnée sensible au-delà du nécessaire.
 - **Performance** : réponse API < 300 ms sur les endpoints du pipeline ; pagination des listes
 - **Qualité** : couverture de tests ≥ 70 % sur les services métier ; CI bloquante (lint + tests) sur toute PR
 - **Accessibilité** : kanban utilisable au clavier, labels de formulaires, contrastes AA
@@ -176,7 +196,7 @@ Points de conception :
 | Risque                                                   | Probabilité | Mitigation                                                                                   |
 | -------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
 | Dérive du scope (« et si j'ajoutais… »)                  | **Élevée**  | Section §5 + toute nouvelle idée va dans le backlog V2, jamais dans le sprint courant        |
-| Sous-estimation des relances automatiques (jobs, emails) | Moyenne     | Spike technique de 2h en début de mois 2 pour valider BullMQ + Resend                        |
+| Sous-estimation des relances automatiques (jobs, emails) | Moyenne     | Spike technique de 2h en début de Phase 2 pour valider l'envoi Resend + le balayage cron     |
 | Manque de temps (10-20h/sem)                             | Moyenne     | MVP découpé en jalons livrables indépendamment ; F6 (stats) est la première coupée si retard |
 | Drag & drop kanban complexe                              | Faible      | Librairie éprouvée (dnd-kit) plutôt qu'une implémentation maison                             |
 
@@ -184,18 +204,29 @@ Points de conception :
 
 ## 11. Jalons
 
-| Jalon             | Échéance           | Contenu                                             | Critère de sortie                             |
-| ----------------- | ------------------ | --------------------------------------------------- | --------------------------------------------- |
-| M1 — Socle API    | Fin mois 2, sem. 2 | Auth, CRUD candidatures, workflow d'états           | Tests d'intégration verts, Swagger publié     |
-| M2 — API complète | Fin mois 2         | Relances (BullMQ), templates, astuces, stats        | US-01 à 04 validées côté API                  |
-| M3 — Front MVP    | Fin mois 3         | Kanban, formulaires, templates, stats               | Parcours complet utilisable, 2 tests E2E      |
-| M4 — Production   | Fin mois 4         | Docker, CI/CD, déploiement, Sentry, 5 bêta-testeurs | URL publique, pipeline vert, premiers retours |
+Dates (D6) ancrées sur `docs/roadmap.md`, S1 = semaine du 2026-07-21 (Phase 0, faite). À ajuster si le rythme réel diffère.
+
+| Jalon             | Échéance       | Contenu                                              | Critère de sortie                             |
+| ----------------- | -------------- | ---------------------------------------------------- | --------------------------------------------- |
+| M1 — Socle API    | **2026-08-17** | Auth, CRUD candidatures, machine à états             | Tests d'intégration verts, Swagger publié     |
+| M2 — API complète | **2026-09-07** | Relances (cron + `Reminder`), templates, astuces     | US-01 à 04 validées côté API                  |
+| M3 — Front MVP    | **2026-10-05** | Kanban, formulaires, templates, indicateurs d'effort | Parcours complet utilisable, 2 tests E2E      |
+| M4 — Production   | **2026-10-26** | Docker, CI/CD, déploiement, Sentry, 5 bêta-testeurs  | URL publique, pipeline vert, premiers retours |
 
 ## 12. Glossaire
 
 - **Pipeline** : ensemble des candidatures d'un utilisateur, organisées par état
 - **Relance** : message envoyé au recruteur après une période sans réponse
 - **Rappel** : notification envoyée à l'utilisateur pour l'inciter à relancer
+
+## 13. Modèle économique (hypothèses à valider)
+
+> Section volontairement **hypothétique** au stade MVP. L'objectif est de la corriger avec des données réelles après les entretiens de la Phase 5 (voir `docs/roadmap.md`), pas de figer un business plan aujourd'hui.
+
+- **MVP** : gratuit, pour lever la friction et recruter les 10 premiers utilisateurs réels. Aucune monétisation tant que l'usage n'est pas prouvé (métrique de survie : des candidatures créées en semaine 3).
+- **Piste B2C (V2)** : freemium — suivi illimité gratuit, fonctions avancées payantes (templates IA, statistiques de résultat, multi-recherches).
+- **Piste B2B / écoles (V2+)** : c'est la raison des tables `Establishment`/`Cohort` (D1). Une école privée paierait un tableau de bord agrégé — **volumes et alertes uniquement**, jamais le contenu des messages ni le détail des refus (D3). Modèle probable : abonnement par promo ou par étudiant.
+- **À vérifier en Phase 5** : les 3 conversations avec des responsables relations entreprises servent à comprendre les budgets réels et l'appétence, **pas à vendre**. Cette section sera réécrite avec ces apprentissages.
 
 ---
 
