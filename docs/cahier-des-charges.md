@@ -4,7 +4,7 @@
 
 |                 |                                                                             |
 | --------------- | --------------------------------------------------------------------------- |
-| **Version**     | 1.0                                                                         |
+| **Version**     | 1.0.01                                                                         |
 | **Auteur**      | [Ton nom]                                                                   |
 | **Statut**      | Validé — MVP en cours                                                       |
 | **Emplacement** | `/docs/cdc.md` dans le repo (document vivant, mis à jour à chaque décision) |
